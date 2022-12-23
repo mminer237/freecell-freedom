@@ -3,7 +3,7 @@ use strum_macros::EnumIter;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-#[derive(EnumIter)]
+#[derive(Debug, EnumIter)]
 pub enum Suit {
 	Spades,
 	Clubs,
@@ -11,12 +11,13 @@ pub enum Suit {
 	Diamonds,
 }
 
+#[derive(Debug)]
 pub struct Card {
 	pub suit: Suit,
 	pub number: u16,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Stack {
 	pub cards: Vec<Card>
 }
@@ -48,7 +49,7 @@ impl Game {
 	pub fn new(seed_number: u64) -> Self {
 		let mut game_seed = GameSeed::new(seed_number);
 		let mut deck = Vec::new();
-		for number in 1..13u16 {
+		for number in 1..13u16+1 {
 			for suit in Suit::iter() {
 				deck.push(Card{
 					suit,
@@ -58,13 +59,16 @@ impl Game {
 		}
 
 		let mut stacks: [Stack; 8] = Default::default();
-		for deck_index in (0..deck.len()).rev() {
-			let stack_sizes: [usize; 8] = [7, 7, 7, 7, 6, 6, 6, 6];
-			for stack_list_index in 0..stack_sizes.len() {
-				let stack = &mut stacks[stack_list_index];
-				for stack_index in 0..stack_sizes[stack_list_index] {
-					let next_number = game_seed.get_next_number(deck_index);
-					stack.cards[stack_index] = deck.remove(next_number);
+		let stack_sizes: [usize; 8] = [7, 7, 7, 7, 6, 6, 6, 6];
+		for stack_list_index in 0..stack_sizes.len() {
+			let stack = &mut stacks[stack_list_index];
+			for _ in 0..stack_sizes[stack_list_index] {
+				if deck.len() > 1 {
+					let next_number = game_seed.get_next_number(deck.len());
+					stack.cards.push(deck.remove(next_number));
+				}
+				else {
+					stack.cards.push(deck.remove(0));
 				}
 			}
 		}
