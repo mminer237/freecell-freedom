@@ -3,7 +3,7 @@ use strum_macros::EnumIter;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-#[derive(Debug, EnumIter)]
+#[derive(Debug, EnumIter, PartialEq)]
 pub enum Suit {
 	Spades,
 	Clubs,
@@ -22,14 +22,36 @@ pub struct Stack {
 	pub cards: Vec<Card>
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
+pub struct FreeCell {
+	card: Option<Card>
+}
+
+#[derive(Debug, Default)]
 pub struct Foundation {
 	cards: Vec<Card>
 }
 
-#[derive(Default)]
+pub trait Cell {
+	fn last_card(&self) -> Option<&Card>;
+}
+
+impl Cell for FreeCell {
+	fn last_card(&self) -> Option<&Card> {
+		self.card.as_ref()
+	}
+}
+
+impl Cell for Foundation {
+	fn last_card(&self) -> Option<&Card> {
+		self.cards.last()
+	}
+}
+
+#[derive(Debug, Default)]
 pub struct Game {
-	pub free_cells: [Option<Card>; 4],
+	pub seed_number: u64,
+	pub free_cells: [FreeCell; 4],
 	pub foundations: [Foundation; 4],
 	pub stacks: [Stack; 8],
 }
@@ -74,6 +96,7 @@ impl Game {
 		}
 
 		Self {
+			seed_number,
 			stacks,
 			..Default::default()
 		}
