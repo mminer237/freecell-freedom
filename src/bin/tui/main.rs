@@ -1,4 +1,4 @@
-use std::{alloc::Layout, thread::sleep, time::Duration, cmp::max, default};
+use std::{alloc::Layout, cmp::max, cmp::min, thread::sleep, time::Duration, default};
 
 use crossterm::{
 	event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -9,7 +9,7 @@ use freecell_freedom::{Game, Suit, Cell, Card, Stack};
 use rand::Rng;
 use rust_i18n::t;
 rust_i18n::i18n!("locales");
-use cursive::{theme::{BorderStyle, Palette}, views::{Panel, ScrollView}, Cursive, XY, View};
+use cursive::{theme::{BorderStyle, Palette}, views::{Panel, ScrollView, PaddedView}, Cursive, XY, View};
 use cursive::traits::With;
 use cursive::views::{Button, LinearLayout, TextView};
 
@@ -65,6 +65,7 @@ fn draw_game(game: &mut Game, siv: &mut Cursive) {
 			)
 			.child(LinearLayout::horizontal()
 				.child(get_cells(game.free_cells.iter().map(|x| x as &dyn Cell), &card_style))
+				.child(TextView::new(if card_style.spacing > 0 {" ".repeat(card_style.spacing * 7)} else { "".to_string() }))
 				.child(get_cells(game.foundations.iter().map(|x| x as &dyn Cell), &card_style))
 			)
 			.child(LinearLayout::horizontal()
@@ -87,20 +88,22 @@ enum CardBorder {
 struct CardStyle<T> {
 	x: T,
 	y: T,
-	border: CardBorder
+	border: CardBorder,
+	spacing: T
 }
 
 fn get_card_style(screen_size: XY<usize>) -> CardStyle<usize> {
 	let border = if screen_size.x >= 39 {
 		if screen_size.y >= 33 { CardBorder::Full } else { CardBorder::Embeded }
-	} else {
+	}
+	else {
 		CardBorder::None
 	};
 	let mut max_width = (screen_size.x - 8) / 8;
 	if max_width % 2 == 0 {
 		max_width -= 1; // Ensure card are an odd width
 	}
-	let max_height = if screen_size.y >= 33 {
+	let mut max_height = if screen_size.y >= 33 {
 		(screen_size.y - 27) / 2
 	}
 	else {
@@ -118,11 +121,15 @@ fn get_card_style(screen_size: XY<usize>) -> CardStyle<usize> {
 	};
 
 	if max_width / 5 / 2 <= max_height / 7 {
-		CardStyle { x: max_width, y: max_width * 7 / 5 / 2, border }
+		max_height = max_width * 7 / 5 / 2;
 	}
 	else {
-		CardStyle { x: max_height * 5 * 2 / 7, y: max_height, border }
+		max_width = max_height * 5 * 2 / 7;
 	}
+
+	let spacing = min((screen_size.x - 1 - max_width * 8) / 7, 4);
+
+	CardStyle { x: max_width, y: max_height, border, spacing }
 }
 
 fn get_cells<'a>(cells: impl Iterator<Item = &'a dyn Cell>, card_style: &CardStyle<usize>) -> LinearLayout {
@@ -136,17 +143,24 @@ fn get_cells<'a>(cells: impl Iterator<Item = &'a dyn Cell>, card_style: &CardSty
 
 fn get_stacks(stacks: &[Stack; 8], card_style: &CardStyle<usize>) -> LinearLayout {
 	let mut layout = LinearLayout::horizontal();
-	for stack in stacks {
-		let mut stack_layout = LinearLayout::vertical();
-		if let Some((last_card, partial_cards)) = stack.cards.split_last() {
-			for card in partial_cards {
-				stack_layout.add_child(render_partial_card(card, card_style));
-			}
-			stack_layout.add_child(render_card(Some(last_card), card_style));
+	if let Some((first_stack, most_stacks)) = stacks.split_first() {
+		layout.add_child(PaddedView::lrtb(0, 0, 0, 0, get_stack(first_stack, card_style)));
+		for stack in most_stacks {
+			layout.add_child(PaddedView::lrtb(card_style.spacing, 0, 0, 0, get_stack(stack, card_style)));
 		}
-		layout.add_child(stack_layout);
 	}
 	layout
+}
+
+fn get_stack(stack: &Stack, card_style: &CardStyle<usize>) -> LinearLayout {
+    let mut stack_layout = LinearLayout::vertical();
+    if let Some((last_card, partial_cards)) = stack.cards.split_last() {
+		for card in partial_cards {
+			stack_layout.add_child(render_partial_card(card, card_style));
+		}
+		stack_layout.add_child(render_card(Some(last_card), card_style));
+	}
+    stack_layout
 }
 
 fn number_symbol(number: &u16, upside_down: bool) -> String {
@@ -313,4 +327,3 @@ fn render_card(card: Option<&Card>, card_style: &CardStyle<usize>) -> Box<dyn Vi
 		Box::new(text) as Box<dyn View>
 	}
 }
-
