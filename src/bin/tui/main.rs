@@ -1,5 +1,8 @@
-use std::{alloc::Layout, cmp::max, cmp::min, thread::sleep, time::Duration, default};
+mod card_view;
 
+use std::{alloc::Layout, cmp::max, cmp::min, thread::sleep, time::Duration, default, rc::Rc};
+
+use card_view::CardView;
 use crossterm::{
 	event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
 	execute,
@@ -55,7 +58,7 @@ fn new_random_game(siv: &mut Cursive) {
 }
 
 fn draw_game(game: &mut Game, siv: &mut Cursive) {
-	let card_style = get_card_style(siv.screen_size());
+	let card_style = Rc::new(get_card_style(siv.screen_size()));
 	// eprintln!("{:?}", card_style);
 	// sleep(Duration::new(2, 0)); // TEMP
 	siv.add_layer(
@@ -64,13 +67,13 @@ fn draw_game(game: &mut Game, siv: &mut Cursive) {
 				.child(Button::new(t!("quit"), |s| s.quit()))
 			)
 			.child(LinearLayout::horizontal()
-				.child(get_cells(game.free_cells.iter().map(|x| x as &dyn Cell), &card_style))
+				.child(get_cells(game.free_cells.iter().map(|x| x as &dyn Cell), card_style.clone()))
 				.child(TextView::new(if card_style.spacing > 0 {" ".repeat(card_style.spacing * 7)} else { "".to_string() }))
-				.child(get_cells(game.foundations.iter().map(|x| x as &dyn Cell), &card_style))
+				.child(get_cells(game.foundations.iter().map(|x| x as &dyn Cell), card_style.clone()))
 			)
 			.child(LinearLayout::horizontal()
 				.child(
-					ScrollView::new(get_stacks(&game.stacks, &card_style))
+					ScrollView::new(get_stacks(&game.stacks, card_style))
 				)
 			)
 	);
@@ -85,7 +88,7 @@ enum CardBorder {
 }
 
 #[derive(Debug)]
-struct CardStyle<T> {
+pub struct CardStyle<T> {
 	x: T,
 	y: T,
 	border: CardBorder,
@@ -132,33 +135,33 @@ fn get_card_style(screen_size: XY<usize>) -> CardStyle<usize> {
 	CardStyle { x: max_width, y: max_height, border, spacing }
 }
 
-fn get_cells<'a>(cells: impl Iterator<Item = &'a dyn Cell>, card_style: &CardStyle<usize>) -> LinearLayout {
+fn get_cells<'a>(cells: impl Iterator<Item = &'a dyn Cell>, card_style: Rc<CardStyle<usize>>) -> LinearLayout {
 	let mut layout = LinearLayout::horizontal();
 	let mut cards: Vec<&Card> = Default::default();
 	for cell in cells {
-		layout.add_child(render_card(cell.last_card(), card_style));
+		layout.add_child(CardView::new(cell.last_card().map(|x| *x), card_style.clone()));
 	}
 	layout
 }
 
-fn get_stacks(stacks: &[Stack; 8], card_style: &CardStyle<usize>) -> LinearLayout {
+fn get_stacks(stacks: &[Stack; 8], card_style: Rc<CardStyle<usize>>) -> LinearLayout {
 	let mut layout = LinearLayout::horizontal();
 	if let Some((first_stack, most_stacks)) = stacks.split_first() {
-		layout.add_child(PaddedView::lrtb(0, 0, 0, 0, get_stack(first_stack, card_style)));
+		layout.add_child(PaddedView::lrtb(0, 0, 0, 0, get_stack(first_stack, card_style.clone())));
 		for stack in most_stacks {
-			layout.add_child(PaddedView::lrtb(card_style.spacing, 0, 0, 0, get_stack(stack, card_style)));
+			layout.add_child(PaddedView::lrtb(card_style.spacing, 0, 0, 0, get_stack(stack, card_style.clone())));
 		}
 	}
 	layout
 }
 
-fn get_stack(stack: &Stack, card_style: &CardStyle<usize>) -> LinearLayout {
+fn get_stack(stack: &Stack, card_style: Rc<CardStyle<usize>>) -> LinearLayout {
     let mut stack_layout = LinearLayout::vertical();
     if let Some((last_card, partial_cards)) = stack.cards.split_last() {
 		for card in partial_cards {
-			stack_layout.add_child(render_partial_card(card, card_style));
+			stack_layout.add_child(render_partial_card(card, card_style.clone()));
 		}
-		stack_layout.add_child(render_card(Some(last_card), card_style));
+		stack_layout.add_child(CardView::new(Some(*last_card), card_style.clone()));
 	}
     stack_layout
 }
@@ -200,57 +203,7 @@ fn suit_symbol(suit: &Suit) -> &'static str {
 	}
 }
 
-fn card_art(card: &Card, size: XY<usize>) -> String {
-	let symbol = suit_symbol(&card.suit);
-	let art = match card.number {
-		1 => {
-			(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2) +
-			&" ".repeat((size.x - 1) / 2) + symbol + &" ".repeat((size.x - 1) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2 - 1) + &(" ".repeat(size.x))
-		},
-		2 => {
-			let mut padding_lines = [(size.y - 2) / 3, (size.y - 2) / 3, (size.y - 2) / 3];
-			if padding_lines[1] * 3 < size.y - 2 {
-				padding_lines[1] += size.y - 2 - padding_lines[1] * 3;
-			}
-			(" ".repeat(size.x) + "\n").repeat(padding_lines[0]) +
-			&" ".repeat((size.x - 1) / 2) + symbol + &" ".repeat((size.x - 1) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat(padding_lines[1]) +
-			&" ".repeat((size.x - 1) / 2) + symbol + &" ".repeat((size.x - 1) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat(padding_lines[2] - 1) + &(" ".repeat(size.x))
-		},
-		3 => {
-			" ".repeat((size.x - 1) / 2) + symbol + &" ".repeat((size.x - 1) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat((size.y - 3) / 2) +
-			&" ".repeat((size.x - 1) / 2) + symbol + &" ".repeat((size.x - 1) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat((size.y - 3) / 2) +
-			&" ".repeat((size.x - 1) / 2) + symbol + &" ".repeat((size.x - 1) / 2)
-		},
-		11 => {
-			(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2) +
-			&" ".repeat((size.x - 1) / 2) + "👲" + &" ".repeat((size.x - 2) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2 - 1) + &(" ".repeat(size.x))
-		},
-		12 => {
-			(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2) +
-			&" ".repeat((size.x - 1) / 2) + "👸" + &" ".repeat((size.x - 2) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2 - 1) + &(" ".repeat(size.x))
-		},
-		13 => {
-			(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2) +
-			&" ".repeat((size.x - 1) / 2) + "🤴" + &" ".repeat((size.x - 2) / 2) + "\n" +
-			&(" ".repeat(size.x) + "\n").repeat((size.y - 1) / 2 - 1) + &(" ".repeat(size.x))
-		},
-		_ => {
-			(" ".repeat(size.x) + "\n").repeat(size.y - 1) + &(" ".repeat(size.x))
-		},
-	};
-	let art_lines = art.lines().count();
-	art +
-	&(if art_lines < size.y { ("\n".to_owned() + &" ".repeat(size.x)).repeat(size.y - art_lines) } else { "".to_string() })
-}
-
-fn render_partial_card(card: &Card, card_style: &CardStyle<usize>) -> TextView {
+fn render_partial_card(card: &Card, card_style: Rc<CardStyle<usize>>) -> TextView {
 	let mut card_text = suit_symbol(&card.suit).to_string() + &number_symbol(&card.number, false);
 	if card_text.len() < 6 + 2 { // Emojis are 6 characters long
 		if card_style.border == CardBorder::Embeded {
@@ -286,44 +239,5 @@ fn render_partial_card(card: &Card, card_style: &CardStyle<usize>) -> TextView {
 				"│"
 			} else { "".to_string() })
 		)
-	}
-}
-
-fn render_card(card: Option<&Card>, card_style: &CardStyle<usize>) -> Box<dyn View> {
-	let border_size = if card_style.border == CardBorder::None { 0 } else { 2 };
-	let text = TextView::new(if let Some(card) = card {
-		(if (card_style.x - border_size - 3) > 0 {
-			" ".repeat(card_style.x - border_size - 3)
-		}
-		else {
-			"".to_owned()
-		}) + suit_symbol(&card.suit) + &number_symbol(&card.number, false) + "\n" +
-		&(if card_style.y - border_size - 2 > 0 {
-			if card_style.y - border_size - 2 >= 4 {
-				card_art(&card, XY{x: card_style.x - 2, y: card_style.y - border_size - 2}) + "\n"
-			}
-			else {
-				(" ".repeat(card_style.x - border_size) + "\n").repeat(card_style.y - border_size - 2)
-			}
-		}
-		else {
-			"".to_string()
-		}) +
-		&(if card_style.y - border_size > 1 { number_symbol(&card.number, true) + suit_symbol(&card.suit) + &" ".repeat(card_style.x - border_size - 3) } else { "".to_owned() })
-	}
-	else {
-		"▒".repeat(card_style.x - border_size) +
-		&(if card_style.y - border_size > 1 {
-			("\n".to_owned() + &("▒".repeat(card_style.x - border_size))).repeat(card_style.y - border_size - 1)
-		}
-		else {
-			"".to_owned()
-		})
-	});
-	if card_style.border == CardBorder::Full || card_style.border == CardBorder::Embeded {
-		Box::new(Panel::new(text)) as Box<dyn View>
-	}
-	else {
-		Box::new(text) as Box<dyn View>
 	}
 }

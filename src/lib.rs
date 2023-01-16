@@ -3,7 +3,7 @@ use strum_macros::EnumIter;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-#[derive(Debug, EnumIter, PartialEq)]
+#[derive(Clone, Copy, Debug, EnumIter, PartialEq)]
 pub enum Suit {
 	Spades,
 	Clubs,
@@ -11,7 +11,7 @@ pub enum Suit {
 	Diamonds,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Card {
 	pub suit: Suit,
 	pub number: u16,
