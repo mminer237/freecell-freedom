@@ -195,6 +195,14 @@ fn number_symbol(number: &u16, upside_down: bool) -> String {
 }
 
 fn suit_symbol(suit: &Suit) -> &'static str {
+	#[cfg(target_os = "windows")]
+	match suit {
+		Suit::Spades => "♠",
+		Suit::Clubs => "♣",
+		Suit::Hearts => "♥",
+		Suit::Diamonds => "♦"
+	}
+	#[cfg(not(target_os = "windows"))]
 	match suit {
 		Suit::Spades => "♠️",
 		Suit::Clubs => "♣️",
@@ -205,7 +213,11 @@ fn suit_symbol(suit: &Suit) -> &'static str {
 
 fn render_partial_card(card: &Card, card_style: Rc<CardStyle<usize>>) -> TextView {
 	let mut card_text = suit_symbol(&card.suit).to_string() + &number_symbol(&card.number, false);
-	if card_text.len() < 6 + 2 { // Emojis are 6 characters long
+	#[cfg(target_os = "windows")]
+	const EMOJI_LENGTH: &'static usize = &3;
+	#[cfg(not(target_os = "windows"))]
+	const EMOJI_LENGTH: &'static usize = &6;
+	if card_text.len() < EMOJI_LENGTH + 2 {
 		if card_style.border == CardBorder::Embeded {
 			card_text += "─";
 		}

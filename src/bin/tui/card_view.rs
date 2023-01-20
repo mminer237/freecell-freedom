@@ -48,7 +48,7 @@ impl View for CardView {
 				}
 				if self.card_style.y - border_size * 2 > 1 {
 					printer.print((border_size, self.card_style.y - border_size * 2), 
-						&(number_symbol(&card.number, true) + suit_symbol(&card.suit) + &" ".repeat(self.card_style.x - border_size * 2 - 3)));
+						&(number_symbol(&card.number, true) + suit_symbol(&card.suit)));
 				}
 			}
 			else {
