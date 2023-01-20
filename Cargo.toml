@@ -18,7 +18,7 @@ strum_macros = "0.24"
 [dependencies.cursive]
 version = "0.20.0"
 default-features = false
-features = ["pancurses-backend"]
+features = ["crossterm-backend"]
 
 [build-dependencies]
 cbindgen = "0.24.3"
